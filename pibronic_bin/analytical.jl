@@ -1,0 +1,48 @@
+#!/usr/bin/env julia
+
+using VibronicToolkit
+
+using ArgParse
+
+s = ArgParseSettings()
+s.autofix_names = true
+@add_arg_table s begin
+    "--conf"
+        metavar = "FILE"
+        help = "path to config file"
+        required = true
+    "--beta"
+        metavar = "T"
+        help = "reciprocal temperature"
+        arg_type = Float64
+        required = true
+    "--uncoupled"
+        help = "remove inter-surface and quadratic coupling from system"
+        action = :store_true
+end
+c = parse_args(ARGS, s, as_symbols=true)
+
+sys = read(c[:conf], DenseSystem)
+beta = c[:beta]
+
+if c[:uncoupled]
+    analytical = Analytical(simplify(diag(sys)), beta)
+else
+    try
+        global analytical = Analytical(DiagonalSystem(sys), beta)
+    catch ex
+        ex isa SurfaceCouplingException || rethrow()
+        error("Analytical solution only applies to uncoupled systems")
+    end
+end
+
+println("Z_analytical: $(analytical.Z)")
+println("E_analytical: $(analytical.E)")
+println("Cv_analytical: $(analytical.Cv)")
+# println("ZH: $(analytical.Z)")
+# println("Zrho: $(analytical.Z)")
+# println("E: $(analytical.E)")
+# println("Erho: $(analytical.E)")
+# println("Cv: $(analytical.Cv)")
+# println("Cvrho: $(analytical.Cv)")
+println("beta: $(beta)")
