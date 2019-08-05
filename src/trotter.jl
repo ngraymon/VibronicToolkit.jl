@@ -42,6 +42,60 @@ function Trotter(sys::System, beta::Float64, basis_size::Int, P::Int)
 end
 
 """
+    Trotter_h_U(sys::System, beta::Float64, basis_size::Int, P::Int)
+
+Calculate the solution for `sys` at `beta` with `basis_size` basis functions
+and `P` links.
+Special version which uses the explicit operator forms instead of the more accurate harmonic oscillator (n + 1/2) version.
+This uses the same splitting of the Hamiltonian as in SumOverStates, into the harmonic part (h), and everything else (U).
+This is for comparison with the SumOverStates_T+V function.
+"""
+function Trotter_h_U(sys::System, beta::Float64, basis_size::Int, P::Int)
+    basis = Basis(sys, basis_size)
+    h0, U = operators_h_U(basis, sys)
+
+    # Single Trotter product.
+    tau = beta / P
+    rho = exp(-tau * h0) * exp(-tau * U)
+
+    # Full path.
+    path = rho^P
+
+    Z = tr(path)
+    E = tr(path * (h0 + U)) / Z
+    Cv = (tr(path * (h0 + U)^2) / Z - E^2) * beta^2
+
+    Trotter(Z, E, Cv)
+end
+
+"""
+    Trotter_T+V(sys::System, beta::Float64, basis_size::Int, P::Int)
+
+Calculate the solution for `sys` at `beta` with `basis_size` basis functions
+and `P` links.
+Special version which uses the explicit operator forms.
+This uses a traditional splitting of the Hamiltonian into the kinetic energy (T) and everything else (V).
+This is for comparison with the SumOverStates_h+U function.
+"""
+function Trotter_T_V(sys::System, beta::Float64, basis_size::Int, P::Int)
+    basis = Basis(sys, basis_size)
+    T, V = operators_T_V(basis, sys)
+
+    # Single Trotter product.
+    tau = beta / P
+    rho = exp(-tau * T) * exp(-tau * V)
+
+    # Full path.
+    path = rho^P
+
+    Z = tr(path)
+    E = tr(path * (T + V)) / Z
+    Cv = (tr(path * (T + V)^2) / Z - E^2) * beta^2
+
+    Trotter(Z, E, Cv)
+end
+
+"""
 Trotter factorized solution for a small PIGS system.
 """
 struct PigsTrotter <: AbstractTrotter

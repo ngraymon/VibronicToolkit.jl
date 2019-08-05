@@ -49,11 +49,25 @@ Number operator in `basis` for a single mode.
 n(basis::Basis) = diagm(0 => 0.0:basis.size-1)
 
 """
+    p2(basis::Basis)
+
+Position operator, raised to the power 2, in `basis` for a single mode.
+"""
+p2(basis::Basis) = -0.5 * (a(basis)' - a(basis))^2
+
+"""
     q(basis::Basis)
 
 Position operator in `basis` for a single mode.
 """
 q(basis::Basis) = (a(basis)' + a(basis)) / sqrt(2.0)
+
+"""
+    q2(basis::Basis)
+
+Position operator, raised to the power 2, in `basis` for a single mode.
+"""
+q2(basis::Basis) = q(basis) * q(basis)
 
 """
     mkop(basis::Basis, op::Matrix{Float64}, idx::Int)
@@ -141,6 +155,104 @@ function operators(basis::Basis{S,M}, sys::System{S,M}) where {S,M}
     maximum(abs.(V' - V)) < 1e-13 || @warn "Asymmetric V: $(maximum(abs.(V' - V)))"
 
     h0, V
+end
+
+"""
+    operators_h_U(basis::Basis{S,M}, sys::System{S,M})
+
+Create `h0` and `U` operators in `basis` for the system described by `sys`.
+Use the explicity operator forms, which is less accurate than the harmonic (n+05) form but is necessary to compare to the T+V splitting.
+"""
+function operators_h_U(basis::Basis{S,M}, sys::System{S,M}) where {S,M}
+    # It's simpler to populate the values into higher rank tensors.
+    h0s = zeros(basis.dim1, basis.dim1, S, S)
+    Us = zeros(basis.dim1, basis.dim1, S, S)
+
+    for s1 in 1:S
+        for s2 in 1:S
+            if s1 == s2
+                h0s[:, :, s1, s1] .+= sys.energy[s1, s1] * mkid(basis)
+
+                for m in 1:M
+                    h0s[:, :, s1, s1] .+= sys.freq[m, s1] * 0.5 * mkop(basis, p2, m)
+                    h0s[:, :, s1, s1] .+= sys.freq[m, s1] * 0.5 * mkop(basis, q2, m)
+                end
+            else
+                Us[:, :, s2, s1] .+= sys.energy[s2, s1] * mkid(basis)
+            end
+
+            for m in 1:M
+                if s1 == s2
+                    h0s[:, :, s1, s1] .+= sys.lin[m, s1, s1] * mkop(basis, q, m)
+                else
+                    Us[:, :, s2, s1] .+= sys.lin[m, s2, s1] * mkop(basis, q, m)
+                end
+            end
+
+            for m1 in 1:M
+                for m2 in 1:M
+                    Us[:, :, s2, s1] .+= 0.5 * sys.quad[m2, m1, s2, s1] * mkop(basis, q, m2) * mkop(basis, q, m1)
+                end
+            end
+        end
+    end
+
+    # Flatten into matrices.
+    h0 = reshape(permutedims(h0s, [1, 3, 2, 4]), (basis.dim, basis.dim))
+    maximum(abs.(h0' - h0)) < 1e-13 || @warn "Asymmetric h0: $(maximum(abs.(h0' - h0)))"
+    U = reshape(permutedims(Us, [1, 3, 2, 4]), (basis.dim, basis.dim))
+    maximum(abs.(U' - U)) < 1e-13 || @warn "Asymmetric U: $(maximum(abs.(U' - U)))"
+
+    h0, U
+end
+
+"""
+    operators_T_V(basis::Basis{S,M}, sys::System{S,M})
+
+Create `T` and `V` operators in `basis` for the system described by `sys`.
+Use the explicity operator forms, which is less accurate than the harmonic (n+05) form but is necessary to compare to the T+V splitting.
+"""
+function operators_T_V(basis::Basis{S,M}, sys::System{S,M}) where {S,M}
+    # It's simpler to populate the values into higher rank tensors.
+    Ts = zeros(basis.dim1, basis.dim1, S, S)
+    Vs = zeros(basis.dim1, basis.dim1, S, S)
+
+    for s1 in 1:S
+        for s2 in 1:S
+            if s1 == s2
+                Vs[:, :, s1, s1] .+= sys.energy[s1, s1] * mkid(basis)
+
+                for m in 1:M
+                    Ts[:, :, s1, s1] .+= sys.freq[m, s1] * 0.5 * mkop(basis, p2, m)
+                    Vs[:, :, s1, s1] .+= sys.freq[m, s1] * 0.5 * mkop(basis, q2, m)
+                end
+            else
+                Vs[:, :, s2, s1] .+= sys.energy[s2, s1] * mkid(basis)
+            end
+
+            for m in 1:M
+                if s1 == s2
+                    Vs[:, :, s1, s1] .+= sys.lin[m, s1, s1] * mkop(basis, q, m)
+                else
+                    Vs[:, :, s2, s1] .+= sys.lin[m, s2, s1] * mkop(basis, q, m)
+                end
+            end
+
+            for m1 in 1:M
+                for m2 in 1:M
+                    Vs[:, :, s2, s1] .+= 0.5 * sys.quad[m2, m1, s2, s1] * mkop(basis, q, m2) * mkop(basis, q, m1)
+                end
+            end
+        end
+    end
+
+    # Flatten into matrices.
+    T = reshape(permutedims(Ts, [1, 3, 2, 4]), (basis.dim, basis.dim))
+    maximum(abs.(T' - T)) < 1e-13 || @warn "Asymmetric T: $(maximum(abs.(T' - T)))"
+    V = reshape(permutedims(Vs, [1, 3, 2, 4]), (basis.dim, basis.dim))
+    maximum(abs.(V' - V)) < 1e-13 || @warn "Asymmetric V: $(maximum(abs.(V' - V)))"
+
+    T, V
 end
 
 """

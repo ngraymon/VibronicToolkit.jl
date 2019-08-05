@@ -36,6 +36,48 @@ function SumOverStates(sys::System, beta::Float64, basis_size::Int)
 end
 
 """
+    SumOverStates_h_U(sys::System, beta::Float64, basis_size::Int)
+
+Calculate the solution for `sys` at `beta` using `basis_size` basis functions.
+Special version which uses the explicit operator forms instead of the more accurate harmonic oscillator (n + 1/2) version.
+This uses the same splitting of the Hamiltonian as in SumOverStates, into the harmonic part (h), and everything else (U).
+This is for comparison with the SumOverStates_T_V function.
+"""
+function SumOverStates_h_U(sys::System, beta::Float64, basis_size::Int)
+    basis = Basis(sys, basis_size)
+    h0, U = operators_h_U(basis, sys)
+
+    Es = eigvals(Symmetric(h0 + U))
+
+    Z = sum(exp.(-beta * Es))
+    E = sum(exp.(-beta * Es) .* Es) / Z
+    Cv = sum(exp.(-beta * Es) .* (Es .- E).^2) / Z * beta^2
+
+    SumOverStates(Z, E, Cv)
+end
+
+"""
+    SumOverStates_T_V(sys::System, beta::Float64, basis_size::Int)
+
+Calculate the solution for `sys` at `beta` using `basis_size` basis functions.
+Special version which uses the explicit operator forms.
+This uses a traditional splitting of the Hamiltonian into the kinetic energy (T) and everything else (V).
+This is for comparison with the SumOverStates_h_U function.
+"""
+function SumOverStates_T_V(sys::System, beta::Float64, basis_size::Int)
+    basis = Basis(sys, basis_size)
+    T, V = operators_T_V(basis, sys)
+
+    Es = eigvals(Symmetric(T + V))
+
+    Z = sum(exp.(-beta * Es))
+    E = sum(exp.(-beta * Es) .* Es) / Z
+    Cv = sum(exp.(-beta * Es) .* (Es .- E).^2) / Z * beta^2
+
+    SumOverStates(Z, E, Cv)
+end
+
+"""
 Sum over states solution for a small PIGS system.
 """
 struct PigsSumOverStates <: AbstractSumOverStates
